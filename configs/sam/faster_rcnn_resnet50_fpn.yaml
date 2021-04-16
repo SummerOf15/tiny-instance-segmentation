@@ -1,0 +1,18 @@
+_BASE_: "../base_rcnn_fpn.yaml"
+MODEL:
+  WEIGHTS: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
+  MASK_ON: False
+  RESNETS:
+    DEPTH: 50
+  ROI_HEADS:
+    NUM_CLASSES: 3
+INPUT:
+  MIN_SIZE_TRAIN: (480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800)
+  MIN_SIZE_TEST: 800
+DATASETS:
+  TRAIN: ("samvr_2007_train",)
+  TEST: ("samvr_2007_train",)
+SOLVER:
+  STEPS: (210000, 250000)
+  MAX_ITER: 270000  # 17.4 epochs
+  WARMUP_ITERS: 100
