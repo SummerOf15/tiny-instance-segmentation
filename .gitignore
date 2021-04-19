@@ -131,3 +131,7 @@ dmypy.json
 # dataset
 experiments/
 dataset/
+output/
+
+# vscode
+.vscode/

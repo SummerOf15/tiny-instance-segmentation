@@ -1,6 +1,6 @@
 #!/bin/sh
 
-conda activate tor
+source /home/$USER/miniconda3/bin/activate tor
 
 echo "=====Job Infos ===="
 # echo "Node List: " $SLURM_NODELIST
