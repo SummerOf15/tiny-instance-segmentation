@@ -21,7 +21,8 @@ DIR=/media/ck/B6DAFDC2DAFD7F45/program/pyTuft/tiny-instance-segmentation
 start_time=`date +%s`
 echo "Job Started at "`date`
 
-TORCH_HOME=$DIR ; python $DIR/tools/tuft_detection.py --num-gpus 1 --dist-url tcp://127.0.0.1:52114 --resume --config-file $DIR/configs/tuft/faster_rcnn_resnet50_fpn.yaml SOLVER.IMS_PER_BATCH 2 SOLVER.BASE_LR 0.0025 OUTPUT_DIR $DIR/experiments/haicu/res50fpn DATA_DIR $DIR/dataset
+TORCH_HOME=$DIR ; python $DIR/tools/tuft_detection.py --num-gpus 1 --is-detr True --dist-url tcp://127.0.0.1:52111 --config-file $DIR/configs/tuft/detr_resnet50_256_6_6_torchvision.yaml SOLVER.IMS_PER_BATCH 1 OUTPUT_DIR $DIR/experiments/tuft/tuft_detr_resnet50 DATA_DIR $DIR/dataset
+
 
 echo "Job ended at "`date`
 end_time=`date +%s`
