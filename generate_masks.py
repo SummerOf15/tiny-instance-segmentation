@@ -237,9 +237,11 @@ if __name__=="__main__":
 
     print(color_dict)
     print(gray_dict)
+    os.makedirs("dataset/GT/",exist_ok=True)
+    os.makedirs("dataset/GT_color/",exist_ok=True)
     bad_list=["DSC_2427","DSC_2430","DSC_2431","DSC_2432","DSC_2433","DSC_2661","DSC_2663","DSC_2673","DSC_2674"]
 
-    for line in open("dataset/ImageSets/Main/all.txt","r").readlines()[:100]:
+    for line in open("dataset/ImageSets/Main/all.txt","r").readlines():
         f_id=line.strip()
         # f_id="DSC_2410"
         # if f_id in bad_list:
