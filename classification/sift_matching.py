@@ -5,9 +5,9 @@ sift image matching then infer the position of tufts.
 import numpy as np
 import cv2 as cv
 import xml.etree.ElementTree as ET
-import matplotlib.pyplot as plt
 from scipy.spatial.kdtree import KDTree
 import os
+
 
 def parse_xml(xml_path):
     """parse xml file and calculate center point of each bounding box
@@ -34,6 +34,7 @@ def parse_xml(xml_path):
         box_dict.setdefault(obj.find("name").text, center_point)
 
     return box_dict
+
 
 def main(pred_image_name):
     dataset="/media/ck/B6DAFDC2DAFD7F45/program/pyTuft/tiny-instance-segmentation/dataset/JPEGImages/"
@@ -108,6 +109,7 @@ def main(pred_image_name):
     # plt.figure(figsize=(20,10))
     # plt.imshow(img3)
     # plt.show()
+
 
 if __name__=="__main__":
     total_correct=0
