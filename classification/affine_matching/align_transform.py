@@ -20,7 +20,7 @@ RATIO = 0.8
 class Align():
 
     def __init__(self, source_path, target_path,
-                 K=3, threshold=1):
+                 K=3, threshold=1, downsample_ratio=5):
         ''' __INIT__
 
             Initialize the instance.
@@ -40,6 +40,7 @@ class Align():
         self.target_path = target_path
         self.K = K
         self.threshold = threshold
+        self.downsample_ratio=downsample_ratio
 
     def read_image(self, path, mode=1):
         ''' READ_IMAGE
@@ -58,7 +59,7 @@ class Align():
 
         '''
         img=cv2.imread(path, mode)
-        img=cv2.resize(img,(600,400),cv2.INTER_NEAREST)
+        img=cv2.resize(img,(img.shape[1]//self.downsample_ratio,img.shape[0]//self.downsample_ratio),cv2.INTER_NEAREST)
         return img
 
     def extract_SIFT(self, img):
@@ -162,6 +163,35 @@ class Align():
 
         return M
 
+    def affine_matrix(self, kp_s, kp_t, fit_pos):
+        ''' AFFINE_MATRIX
+
+            Compute affine transformation matrix by corresponding points.
+
+            Input arguments:
+
+            - kp_s : key points from source image
+            - kp_t : key points from target image
+            - fit_pos : index of corresponding points
+
+            Output:
+
+            - M : the affine transformation matrix whose dimension
+            is 2 by 3
+
+        '''
+
+        # Extract corresponding points from all key points
+        kp_s = kp_s[:, fit_pos[:, 0]]
+        kp_t = kp_t[:, fit_pos[:, 1]]
+
+        # Apply RANSAC to find most inliers
+        _, _, inliers = Ransac(self.K, self.threshold).ransac_fit(kp_s, kp_t)
+
+        # Extract all inliers from all key points
+        kp_s = kp_s[:, inliers[0]]
+        kp_t = kp_t[:, inliers[0]]
+
     def warp_image(self, source, target, M):
         ''' WARP_IMAGE
 
@@ -263,3 +293,35 @@ class Align():
 
         return target
 
+    def align_box(self,pts, draw=False):
+        ''' ALIGN_IMAGE
+
+            Warp the source image into target image.
+            Two images' path are provided when the
+            instance Align() is created.
+
+        '''
+
+        # Load source image and target image
+        img_source = self.read_image(self.source_path)
+        img_target = self.read_image(self.target_path)
+
+        # Extract key points and SIFT descriptors from
+        # source image and target image respectively
+        kp_s, desc_s = self.extract_SIFT(img_source)
+        kp_t, desc_t = self.extract_SIFT(img_target)
+
+        # Obtain the index of correcponding points
+        fit_pos = self.match_SIFT(desc_s, desc_t)
+
+        # Compute the affine transformation matrix
+        M = self.affine_matrix(kp_s, kp_t, fit_pos)
+
+        # Warp the source image and display result
+        left_top_array=pts[:2,:]
+        right_bottom_array=pts[2:,:]
+        left_top_array=self.warp_points(left_top_array, M)
+        right_bottom_array=self.warp_points(right_bottom_array,M)
+
+        
+        return left_top_array, right_bottom_array
