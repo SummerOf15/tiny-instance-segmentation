@@ -66,7 +66,7 @@ def xml_to_txt_pascalvoc(xml_id):
             f.write("{} {} {} {} {}\n".format(k, int(xml_dict[k][0]),int(xml_dict[k][1]),int(xml_dict[k][2]),int(xml_dict[k][3])))
 
 
-def predict(pred_image_name, draw=False, save_result=False):
+def predict_box(pred_image_name, draw=False, save_result=False):
     """predict the location of tufts in pred_image
 
     Args:
@@ -115,7 +115,49 @@ def predict(pred_image_name, draw=False, save_result=False):
         # cv2.imwrite("result/{}.jpg".format(pred_image_name), img_target)
 
 
-def evaluate(pred_image_name):
+def predict_classification(pred_image_name, draw=False):
+    ref_image_path=dataset+'DSC_2410.JPG' # source/reference image path
+    ref_xml=parse_xml(annotation_dir+'DSC_2410.xml')  # reference image bounding box
+    
+    # check if the annotation file exists
+    if not os.path.isfile(annotation_dir+pred_image_name+'.xml'):
+        return None,None
+
+    target_image_path = dataset+pred_image_name+'.JPG'        # target image/image to be predicted
+    target_xml=parse_xml(annotation_dir+pred_image_name+'.xml')  # target image annotations, used for evaluation
+    ref_xml_array=np.array(list(ref_xml.values()))
+    target_xml_array=np.array(list(target_xml.values()))
+
+    # calculate the tranformation matrix and predict the corresponding points
+    a=Align(ref_image_path,target_image_path,threshold=1, downsample_ratio=downsample_ratio)
+    transformed_array=a.align_points(ref_xml_array.T)
+
+    ref_keys=list(ref_xml.keys())
+
+    box_tree2=KDTree(target_xml_array)  # a KD-tree to search for the nearest annotations
+
+    predict_result=[] # predict result
+
+    for i in range(transformed_array.shape[1]):
+        dist1, ind=box_tree2.query(transformed_array[:,i].T,k=1) # choose the nearest point of predicted result
+        predict_result.append([ref_keys[i], target_xml_array[ind,0], target_xml_array[ind,1]])
+    
+    if draw:
+        plt.subplot(121)
+        plt.title("known coords and labels")
+        for k in ref_xml.keys():
+            plt.plot(ref_xml[k][0], ref_xml[k][1], 'o')
+            plt.text(ref_xml[k][0], ref_xml[k][1], k)
+
+        plt.subplot(122)
+        plt.title("known coords found labels")
+        for label, x,y in predict_result:
+            plt.plot(x, y, 'o')
+            plt.text(x, y, label)
+        plt.show()
+
+
+def evaluate_classification(pred_image_name):
     """evaluate the transformation performance
 
     Args:
@@ -187,14 +229,14 @@ def generate_evaluation_txt():
 
 if __name__=="__main__":
     EVALUATION=False
-    metric="box" # box or point
+    metric="point" # box or point
     if EVALUATION:
         if metric=="point":
             total_ref=[]
             total_predict=[]
             for i in range(1300):
                 print("test DSC_{}".format(2411+i))
-                ref_keys, predict_keys=evaluate("DSC_{}".format(2411+i))
+                ref_keys, predict_keys=evaluate_classification("DSC_{}".format(2411+i))
                 if ref_keys is None:
                     continue
                 total_ref+=ref_keys
@@ -208,8 +250,11 @@ if __name__=="__main__":
         elif metric=="box":
             generate_evaluation_txt()
     else:
-        image_name="DSC_2496"
-        predict(image_name, draw=True)
+        image_name="DSC_2423"
+        if metric=="point":
+            predict_classification(image_name, draw=True)
+        elif metric=="box":
+            predict_box(image_name, draw=True)
         
 
     

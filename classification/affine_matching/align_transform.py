@@ -163,10 +163,10 @@ class Align():
 
         return M
 
-    def affine_matrix(self, kp_s, kp_t, fit_pos):
+    def perspective_matrix(self, kp_s, kp_t, fit_pos):
         ''' AFFINE_MATRIX
 
-            Compute affine transformation matrix by corresponding points.
+            Compute perspective transformation matrix by corresponding points.
 
             Input arguments:
 
@@ -177,7 +177,7 @@ class Align():
             Output:
 
             - M : the affine transformation matrix whose dimension
-            is 2 by 3
+            is 3 by 3
 
         '''
 
@@ -191,6 +191,9 @@ class Align():
         # Extract all inliers from all key points
         kp_s = kp_s[:, inliers[0]]
         kp_t = kp_t[:, inliers[0]]
+
+        M = cv2.getPerspectiveTransform(kp_s,kp_t)
+        return M
 
     def warp_image(self, source, target, M):
         ''' WARP_IMAGE
@@ -211,6 +214,7 @@ class Align():
 
         # Warp the source image
         warp = cv2.warpAffine(source, M, (cols, rows))
+        # warp = cv2.warpPerspective(source, M, (cols, rows))
 
         # Merge warped image with target image to display
         merge = np.uint8(target * 0.5 + warp * 0.5)
@@ -258,6 +262,7 @@ class Align():
 
         # Compute the affine transformation matrix
         M = self.affine_matrix(kp_s, kp_t, fit_pos)
+        # M = self.perspective_matrix(kp_s, kp_t, fit_pos)
 
         # Warp the source image and display result
         self.warp_image(img_source, img_target, M)
