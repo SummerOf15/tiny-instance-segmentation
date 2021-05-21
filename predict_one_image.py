@@ -7,6 +7,8 @@ from detectron2.engine import DefaultPredictor
 from p_detector.configs import add_tuft_config, add_detr_config
 from detectron2.data import MetadataCatalog
 from detectron2.utils.visualizer import Visualizer
+from classification.affine_matching.affine_matching import predict_classification, parse_xml
+import numpy as np
 
 
 def setup(detr=False):
@@ -33,19 +35,61 @@ def detect_tufts(image_path, draw=False):
 
     model=DefaultPredictor(cfg)
     outputs = model(img)
-    print(outputs)
     if draw:
-        v= Visualizer(img[:, :, ::-1],
-                        metadata=MetadataCatalog.get("tufts"), 
-                        scale=0.5
-            )
-        out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
-        cv2.imshow("result",out.get_image()[:, :, ::-1])
-        cv2.waitKey(0)
+        detection_results=outputs["instances"].to("cpu")
+        visualize_results(img,detection_results)
     return outputs
 
 
-if __name__=="__main__":
-    test_image_path="/media/ck/B6DAFDC2DAFD7F45/program/pyTuft/tiny-instance-segmentation/dataset/JPEGImages/DSC_2420.JPG"
-    detection_results=detect_tufts(test_image_path)
+def calc_center_from_box(box_array):
+    """calculate center point of boxes
+
+    Args:
+        box_array (array): N*4 [left_top_x, left_top_y, right_bottom_x, right_bottom_y]
     
+    Returns:
+        array N*2: center points array [x, y]
+    """
+    center_array=[]
+    for box in box_array:
+        center_array.append([(box[0]+box[2])//2, (box[1]+box[3])//2])
+    
+    return np.array(center_array)
+
+
+def visualize_results(image, detection_results):
+    v= Visualizer(image[:, :, ::-1],
+                        metadata=MetadataCatalog.get("tufts"), 
+                        scale=0.5
+            )
+    out = v.draw_instance_predictions(detection_results)
+    cv2.imshow("result",out.get_image()[:, :, ::-1])
+    cv2.waitKey(0)
+
+
+if __name__=="__main__":
+    dataset_dir="/media/ck/B6DAFDC2DAFD7F45/program/pyTuft/tiny-instance-segmentation/dataset/"
+    annotation_dir=dataset_dir+"Annotations/"
+    image_dir=dataset_dir+"JPEGImages/"
+    test_image_id="DSC_2422"
+    ref_image_id="DSC_2410"
+
+    # build the category dict for visualization
+    ref_xml=parse_xml(annotation_dir+ref_image_id+".xml")
+    MetadataCatalog.get("tufts").set(thing_classes=list(ref_xml.keys()))
+
+    # detect bounding boxes for test image
+    test_image_path=image_dir+test_image_id+".JPG"
+    detection_results=detect_tufts(test_image_path)
+    print(detection_results)
+
+    # propagate class information for the bounding boxes
+    boxes=detection_results["instances"].to("cpu")
+    center_array=calc_center_from_box(boxes.pred_boxes)
+    predict_result=predict_classification(test_image_id,dataset_dir, ref_image_id, target_box_center=center_array, draw=False)
+    for i in range(boxes.pred_classes.shape[0]):
+        boxes.pred_classes[i]=predict_result[i]
+
+    # draw the final detection results
+    image=cv2.imread(test_image_path)
+    visualize_results(image, boxes)

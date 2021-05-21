@@ -7,16 +7,13 @@ import numpy as np
 import xml.etree.ElementTree as ET
 from scipy.spatial.kdtree import KDTree
 import os
-from align_transform import Align
+from .align_transform import Align
 from pycm import *
 import matplotlib.pyplot as plt
 import cv2
 
 
-dataset="/media/ck/B6DAFDC2DAFD7F45/program/pyTuft/tiny-instance-segmentation/dataset/JPEGImages/"
-annotation_dir="/media/ck/B6DAFDC2DAFD7F45/program/pyTuft/tiny-instance-segmentation/dataset/Annotations/"
 downsample_ratio=2
-
 def parse_xml(xml_path):
     """parse xml file and calculate center point of each bounding box
 
@@ -59,6 +56,7 @@ def parse_xml_box(xml_path):
 
 
 def xml_to_txt_pascalvoc(xml_id):
+    annotation_dir=os.path.join(dataset_dir,"Annotations/")
     xml_dict=parse_xml_box(annotation_dir+xml_id+".xml")
 
     with open("gt_txt/{}.txt".format(xml_id),"w") as f:
@@ -66,18 +64,20 @@ def xml_to_txt_pascalvoc(xml_id):
             f.write("{} {} {} {} {}\n".format(k, int(xml_dict[k][0]),int(xml_dict[k][1]),int(xml_dict[k][2]),int(xml_dict[k][3])))
 
 
-def predict_box(pred_image_name, draw=False, save_result=False):
+def predict_box(pred_image_name, dataset_dir,draw=False, save_result=False):
     """predict the location of tufts in pred_image
 
     Args:
         pred_image_name (str): id of target image
         draw (bool): whether to draw the result
     """
-    ref_image_path=dataset+'DSC_2410.JPG' # source/reference image path
+    annotation_dir=os.path.join(dataset_dir,"Annotations/")
+    image_dir=os.path.join(dataset_dir,"JPEGImages/")
+    ref_image_path=image_dir+'DSC_2410.JPG' # source/reference image path
     ref_xml=parse_xml_box(annotation_dir+'DSC_2410.xml')  # reference image bounding box
     ref_xml_array=np.array(list(ref_xml.values()))
     
-    target_image_path = dataset+pred_image_name+'.JPG'        # target image/image to be predicted
+    target_image_path = image_dir+pred_image_name+'.JPG'        # target image/image to be predicted
     
     # calculate the tranformation matrix and predict the corresponding points
     a=Align(ref_image_path,target_image_path,threshold=1, downsample_ratio=downsample_ratio)
@@ -115,18 +115,23 @@ def predict_box(pred_image_name, draw=False, save_result=False):
         # cv2.imwrite("result/{}.jpg".format(pred_image_name), img_target)
 
 
-def predict_classification(pred_image_name, draw=False):
-    ref_image_path=dataset+'DSC_2410.JPG' # source/reference image path
-    ref_xml=parse_xml(annotation_dir+'DSC_2410.xml')  # reference image bounding box
+def predict_classification(pred_image_id, dataset_dir, ref_image_id="DSC_2410", target_box_center=None, draw=False):
+    annotation_dir=os.path.join(dataset_dir,"Annotations/")
+    image_dir=os.path.join(dataset_dir,"JPEGImages/")
+    ref_image_path=image_dir+ref_image_id+'.JPG' # source/reference image path
+    ref_xml=parse_xml(annotation_dir+ref_image_id+'.xml')  # reference image bounding box
     
-    # check if the annotation file exists
-    if not os.path.isfile(annotation_dir+pred_image_name+'.xml'):
-        return None,None
+    target_image_path = image_dir+pred_image_id+'.JPG'        # target image/image to be predicted
+    if target_box_center is None:
+        # check if the annotation file exists
+        if not os.path.isfile(annotation_dir+pred_image_id+'.xml'):
+            return None,None
+        target_xml=parse_xml(annotation_dir+pred_image_id+'.xml')  # target image annotations, used for evaluation
+        target_xml_array=np.array(list(target_xml.values()))
+    else:
+        target_xml_array=target_box_center//downsample_ratio
 
-    target_image_path = dataset+pred_image_name+'.JPG'        # target image/image to be predicted
-    target_xml=parse_xml(annotation_dir+pred_image_name+'.xml')  # target image annotations, used for evaluation
     ref_xml_array=np.array(list(ref_xml.values()))
-    target_xml_array=np.array(list(target_xml.values()))
 
     # calculate the tranformation matrix and predict the corresponding points
     a=Align(ref_image_path,target_image_path,threshold=1, downsample_ratio=downsample_ratio)
@@ -136,11 +141,11 @@ def predict_classification(pred_image_name, draw=False):
 
     box_tree2=KDTree(target_xml_array)  # a KD-tree to search for the nearest annotations
 
-    predict_result=[] # predict result
+    predict_result={} # predict result
 
     for i in range(transformed_array.shape[1]):
         dist1, ind=box_tree2.query(transformed_array[:,i].T,k=1) # choose the nearest point of predicted result
-        predict_result.append([ref_keys[i], target_xml_array[ind,0], target_xml_array[ind,1]])
+        predict_result.setdefault(ind, i)
     
     if draw:
         plt.subplot(121)
@@ -151,13 +156,14 @@ def predict_classification(pred_image_name, draw=False):
 
         plt.subplot(122)
         plt.title("known coords found labels")
-        for label, x,y in predict_result:
-            plt.plot(x, y, 'o')
-            plt.text(x, y, label)
+        for ind in predict_result.keys():
+            plt.plot(target_xml_array[ind][0], target_xml_array[ind][1], 'o')
+            plt.text(target_xml_array[ind][0], target_xml_array[ind][1], ref_keys[predict_result[ind]])
         plt.show()
+    return predict_result
 
 
-def evaluate_classification(pred_image_name):
+def evaluate_classification(pred_image_name, dataset_dir):
     """evaluate the transformation performance
 
     Args:
@@ -167,14 +173,17 @@ def evaluate_classification(pred_image_name):
         list: annotated class
         list: predicted class 
     """
-    ref_image_path=dataset+'DSC_2410.JPG' # source/reference image path
+    annotation_dir=os.path.join(dataset_dir,"Annotations/")
+    image_dir=os.path.join(dataset_dir,"JPEGImages/")
+
+    ref_image_path=image_dir+'DSC_2410.JPG' # source/reference image path
     ref_xml=parse_xml(annotation_dir+'DSC_2410.xml')  # reference image bounding box
     
     # check if the annotation file exists
     if not os.path.isfile(annotation_dir+pred_image_name+'.xml'):
         return None,None
 
-    target_image_path = dataset+pred_image_name+'.JPG'        # target image/image to be predicted
+    target_image_path = image_dir+pred_image_name+'.JPG'        # target image/image to be predicted
     target_xml=parse_xml(annotation_dir+pred_image_name+'.xml')  # target image annotations, used for evaluation
     ref_xml_array=np.array(list(ref_xml.values()))
     target_xml_array=np.array(list(target_xml.values()))
@@ -205,10 +214,13 @@ def evaluate_classification(pred_image_name):
     return ref_keys, predict_keys
 
 
-def generate_evaluation_txt():
+def generate_evaluation_txt(dataset_dir):
     '''
     generate the txt file to store the prediction results
     '''
+    annotation_dir=os.path.join(dataset_dir,"Annotations/")
+    image_dir=os.path.join(dataset_dir,"JPEGImages/")
+
     os.makedirs("pred_txt/", exist_ok=True)
     os.makedirs("gt_txt/", exist_ok=True)
 
@@ -221,13 +233,15 @@ def generate_evaluation_txt():
             print("no file"+ annotation_dir+pred_id+'.xml')
             continue
         total_files+=1
-        predict("DSC_{}".format(2411+i), save_result=True) # save txt
+        predict_box("DSC_{}".format(2411+i),dataset_dir, save_result=True) # save txt
         # predict("DSC_{}".format(2411+i), draw=True, save_result=False) # save pred image
         xml_to_txt_pascalvoc(pred_id)
     print("total {} files".format(total_files))
 
 
 if __name__=="__main__":
+    dataset_dir="/media/ck/B6DAFDC2DAFD7F45/program/pyTuft/tiny-instance-segmentation/dataset/"
+    
     EVALUATION=False
     metric="point" # box or point
     if EVALUATION:
@@ -236,7 +250,7 @@ if __name__=="__main__":
             total_predict=[]
             for i in range(1300):
                 print("test DSC_{}".format(2411+i))
-                ref_keys, predict_keys=evaluate_classification("DSC_{}".format(2411+i))
+                ref_keys, predict_keys=evaluate_classification("DSC_{}".format(2411+i),dataset_dir)
                 if ref_keys is None:
                     continue
                 total_ref+=ref_keys
@@ -248,13 +262,13 @@ if __name__=="__main__":
             cm.plot(cmap=plt.cm.Greens,number_label=True,plot_lib="matplotlib")
             plt.show()
         elif metric=="box":
-            generate_evaluation_txt()
+            generate_evaluation_txt(dataset_dir)
     else:
         image_name="DSC_2423"
         if metric=="point":
-            predict_classification(image_name, draw=True)
+            predict_classification(image_name,dataset_dir, draw=True)
         elif metric=="box":
-            predict_box(image_name, draw=True)
+            predict_box(image_name,dataset_dir, draw=True)
         
 
     

@@ -6,8 +6,8 @@
 
 import cv2
 import numpy as np
-from affine_ransac import Ransac
-from affine_transform import Affine
+from .affine_ransac import Ransac
+from .affine_transform import Affine
 
 
 # The ration of the best match over second best match

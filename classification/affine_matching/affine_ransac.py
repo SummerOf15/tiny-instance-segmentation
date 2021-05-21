@@ -5,7 +5,7 @@
 
 
 import numpy as np
-from affine_transform import Affine
+from .affine_transform import Affine
 
 
 # The number of iterations in RANSAC
