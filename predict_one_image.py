@@ -9,6 +9,7 @@ from detectron2.data import MetadataCatalog
 from detectron2.utils.visualizer import Visualizer
 from classification.affine_matching.affine_matching import predict_classification, parse_xml
 import numpy as np
+import os
 
 
 def setup(detr=False):
@@ -29,7 +30,7 @@ def setup(detr=False):
     return cfg
 
 
-def detect_tufts(image_path, draw=False):
+def detect_tufts_one_image(image_path, draw=False):
     img=cv2.imread(image_path)
     cfg = setup()
 
@@ -39,6 +40,7 @@ def detect_tufts(image_path, draw=False):
         detection_results=outputs["instances"].to("cpu")
         visualize_results(img,detection_results)
     return outputs
+
 
 
 def calc_center_from_box(box_array):
@@ -57,20 +59,36 @@ def calc_center_from_box(box_array):
     return np.array(center_array)
 
 
-def visualize_results(image, detection_results):
+def visualize_results(image, detection_results, draw=True):
+    """visualize detection and classification results
+
+    Args:
+        image (array): test image
+        detection_results (array): boxes 
+        draw (bool, optional): whether to show the results. Defaults to True.
+
+    Returns: 
+        array: the result image
+    """
     v= Visualizer(image[:, :, ::-1],
                         metadata=MetadataCatalog.get("tufts"), 
                         scale=0.5
             )
     out = v.draw_instance_predictions(detection_results)
-    cv2.imshow("result",out.get_image()[:, :, ::-1])
-    cv2.waitKey(0)
+    if draw:
+        cv2.imshow("result",out.get_image()[:, :, ::-1])
+        cv2.waitKey(0)
 
+    return out.get_image()[:, :, ::-1]
+    
 
 if __name__=="__main__":
     dataset_dir="/media/ck/B6DAFDC2DAFD7F45/program/pyTuft/tiny-instance-segmentation/dataset/"
     annotation_dir=dataset_dir+"Annotations/"
     image_dir=dataset_dir+"JPEGImages/"
+
+    save_image=True
+    output_dir="./output/"
     test_image_id="DSC_2422"
     ref_image_id="DSC_2410"
 
@@ -80,7 +98,7 @@ if __name__=="__main__":
 
     # detect bounding boxes for test image
     test_image_path=image_dir+test_image_id+".JPG"
-    detection_results=detect_tufts(test_image_path)
+    detection_results=detect_tufts_one_image(test_image_path)
     print(detection_results)
 
     # propagate class information for the bounding boxes
@@ -92,4 +110,11 @@ if __name__=="__main__":
 
     # draw the final detection results
     image=cv2.imread(test_image_path)
-    visualize_results(image, boxes)
+    if save_image:
+        results=visualize_results(image, boxes, draw=False)
+        save_image_dir=output_dir+"final_results/"
+        os.makedirs(save_image_dir, exist_ok=True)
+        cv2.imwrite(save_image_dir+test_image_id+".png",results)
+        print("image saved to "+save_image_dir+test_image_id+".png")
+    else:
+        visualize_results(image, boxes, draw=True)
