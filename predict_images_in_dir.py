@@ -1,5 +1,5 @@
 '''
-predict the bounding box for one image and visualize the results
+predict the bounding box for images in a directory and save the results
 '''
 from detectron2.config import get_cfg
 import cv2
@@ -63,6 +63,14 @@ def visualize_results(image, detection_results, draw=True):
 
 
 def detect_tufts_one_dir(image_dir):
+    """detect the bounding boxes for each image in image_dir
+
+    Args:
+        image_dir (str): test image dir
+
+    Returns:
+        [dict]: a dict that stores the detection results
+    """
     import json
     image_name_list=os.listdir(image_dir)
     result_dict=dict.fromkeys(image_name_list)
@@ -98,7 +106,14 @@ def calc_center_from_box(box_array):
 
 
 def predict_tufts(boxes_dict):
-    # propagate class information for the bounding boxes
+    """propagate class information for the detected bounding boxes
+
+    Args:
+        boxes_dict (dict): detection results without class info
+
+    Returns:
+        [dict]: results with class info
+    """
     for k in boxes_dict.keys():
         boxes=boxes_dict[k]
         center_array=calc_center_from_box(boxes.pred_boxes)
@@ -109,7 +124,13 @@ def predict_tufts(boxes_dict):
 
 
 def save_files(boxes_dict, image_dir, output_dir):
-    # draw the final detection results
+    """save final results
+
+    Args:
+        boxes_dict (dict): dict that stores the prediction results
+        image_dir (str): test image directory
+        output_dir (str): image directory to save prediction results
+    """
     for k in boxes_dict.keys():
         image=cv2.imread(os.path.join(image_dir,k))
         
@@ -121,7 +142,6 @@ def save_files(boxes_dict, image_dir, output_dir):
 
 
 if __name__=="__main__":
-
     ref_xml=parse_xml(annotation_dir+ref_image_id+".xml")
     MetadataCatalog.get("tufts").set(thing_classes=list(ref_xml.keys()))
     detection_results=detect_tufts_one_dir(image_dir)

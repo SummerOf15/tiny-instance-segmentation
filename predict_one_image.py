@@ -12,6 +12,18 @@ import numpy as np
 import os
 
 
+config_file_path="/media/ck/B6DAFDC2DAFD7F45/program/pyTuft/tiny-instance-segmentation/configs/haicu/faster_rcnn_resnet50_fpn.yaml"
+weight_file_path="/media/ck/B6DAFDC2DAFD7F45/program/pyTuft/tiny-instance-segmentation/experiments/haicu/res50fpn/model_0039999.pth"
+dataset_dir="/media/ck/B6DAFDC2DAFD7F45/program/pyTuft/tiny-instance-segmentation/dataset/"
+annotation_dir=dataset_dir+"Annotations/" # only for the reference image annotations
+image_dir=dataset_dir+"JPEGImages/"  # test image dir
+
+save_image=False   # whether to show results or save results
+output_dir="./output/"  # directory to save final results
+test_image_id="DSC_2422" #image id to predict the tufts
+ref_image_id="DSC_2410" # be careful about the choice of reference image. it's suggested to choose a image with all categories.
+
+
 def setup(detr=False):
     """
     Create configs and perform basic setups.
@@ -24,13 +36,22 @@ def setup(detr=False):
         add_detr_config(cfg)
     else:
         add_tuft_config(cfg)
-    cfg.merge_from_file("/media/ck/B6DAFDC2DAFD7F45/program/pyTuft/tiny-instance-segmentation/configs/haicu/faster_rcnn_resnet50_fpn.yaml")
-    cfg.MODEL.WEIGHTS = "/media/ck/B6DAFDC2DAFD7F45/program/pyTuft/tiny-instance-segmentation/experiments/haicu/res50fpn/model_0039999.pth"
+    cfg.merge_from_file(config_file_path)
+    cfg.MODEL.WEIGHTS = weight_file_path
     cfg.freeze()
     return cfg
 
 
 def detect_tufts_one_image(image_path, draw=False):
+    """detect the bounding box of tufts in an image
+
+    Args:
+        image_path (str): path of test image
+        draw (bool, optional): whether to visualize detection results. Defaults to False.
+
+    Returns:
+        [dict]: stores the detection results
+    """
     img=cv2.imread(image_path)
     cfg = setup()
 
@@ -83,15 +104,7 @@ def visualize_results(image, detection_results, draw=True):
     
 
 if __name__=="__main__":
-    dataset_dir="/media/ck/B6DAFDC2DAFD7F45/program/pyTuft/tiny-instance-segmentation/dataset/"
-    annotation_dir=dataset_dir+"Annotations/"
-    image_dir=dataset_dir+"JPEGImages/"
-
-    save_image=True
-    output_dir="./output/"
-    test_image_id="DSC_2422"
-    ref_image_id="DSC_2410"
-
+    
     # build the category dict for visualization
     ref_xml=parse_xml(annotation_dir+ref_image_id+".xml")
     MetadataCatalog.get("tufts").set(thing_classes=list(ref_xml.keys()))
