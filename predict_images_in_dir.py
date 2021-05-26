@@ -10,6 +10,7 @@ from detectron2.utils.visualizer import Visualizer
 from classification.affine_matching.affine_matching import predict_classification, parse_xml
 import numpy as np
 import os
+import random
 
 
 config_file_path="/media/ck/B6DAFDC2DAFD7F45/program/pyTuft/tiny-instance-segmentation/configs/haicu/faster_rcnn_resnet50_fpn.yaml"
@@ -18,8 +19,10 @@ dataset_dir="/media/ck/B6DAFDC2DAFD7F45/program/pyTuft/tiny-instance-segmentatio
 annotation_dir=dataset_dir+"Annotations/"
 image_dir=dataset_dir+"JPEGImages1/"
 output_dir="./output/"
-ref_image_id="DSC_2410"
 
+random_choose=True  # whether choose the reference images randomly
+initial_image_id="DSC_2410" # if not randomly, set the fixed ref_image_id
+num_ref_ids=5
 
 def setup(detr=False):
     """
@@ -71,7 +74,6 @@ def detect_tufts_one_dir(image_dir):
     Returns:
         [dict]: a dict that stores the detection results
     """
-    import json
     image_name_list=os.listdir(image_dir)
     result_dict=dict.fromkeys(image_name_list)
     cfg = setup()
@@ -105,6 +107,18 @@ def calc_center_from_box(box_array):
     return np.array(center_array)
 
 
+def choose_ref_image_id_list():
+    """randomly choose some reference images
+
+    Returns:
+        list: a list to store reference image ids
+    """
+    annotation_list=os.listdir(annotation_dir)
+    ref_annotation_list=random.sample(annotation_list, num_ref_ids)
+    ref_id_list=[x[:-4] for x in ref_annotation_list]
+    return ref_id_list
+    
+
 def predict_tufts(boxes_dict):
     """propagate class information for the detected bounding boxes
 
@@ -116,10 +130,15 @@ def predict_tufts(boxes_dict):
     """
     for k in boxes_dict.keys():
         boxes=boxes_dict[k]
-        center_array=calc_center_from_box(boxes.pred_boxes)
-        predict_result=predict_classification(k[:-4],dataset_dir, ref_image_id, target_box_center=center_array, draw=False)
-        for i in range(boxes.pred_classes.shape[0]):
-            boxes_dict[k].pred_classes[i]=predict_result[i]
+        
+        try:
+            center_array=calc_center_from_box(boxes.pred_boxes)
+            predict_result=predict_classification(k[:-4],dataset_dir, ref_image_id_list, target_box_center=center_array, draw=False)
+            for i in range(boxes.pred_classes.shape[0]):
+                if predict_result.__contains__(i):
+                    boxes_dict[k].pred_classes[i]=predict_result[i]
+        except Exception as e:
+            print("{} error {}".format(k,e))
     return boxes_dict
 
 
@@ -131,19 +150,38 @@ def save_files(boxes_dict, image_dir, output_dir):
         image_dir (str): test image directory
         output_dir (str): image directory to save prediction results
     """
+    # import json
+    # import jsonpickle
+    # # save the predicted bounding boxes
+    # with open(output_dir+"results.json","w") as f:
+    #     save_str=jsonpickle.encode(boxes_dict)
+    #     json.dump(save_str, f)
+
     for k in boxes_dict.keys():
         image=cv2.imread(os.path.join(image_dir,k))
-        
         results=visualize_results(image, boxes_dict[k], draw=False)
         save_image_dir=output_dir+"final_results/"
         os.makedirs(save_image_dir, exist_ok=True)
-        cv2.imwrite(save_image_dir+k+".png",results)
-        print("image saved to "+save_image_dir+k+".png")
+        cv2.imwrite(save_image_dir+k[:-4]+".png",results)
+        print("image saved to "+save_image_dir+k[:-4]+".png")
 
 
 if __name__=="__main__":
-    ref_xml=parse_xml(annotation_dir+ref_image_id+".xml")
+    # generate the ref image id list
+    if random_choose:
+        ref_image_id_list=choose_ref_image_id_list()
+    else:
+        ref_image_id_list=[initial_image_id]
+
+    # set one fixed annotation file to build the category dict for visualization
+    ref_xml=parse_xml(annotation_dir+"DSC_2410"+".xml")
     MetadataCatalog.get("tufts").set(thing_classes=list(ref_xml.keys()))
+    
+    # detect tufts from images
     detection_results=detect_tufts_one_dir(image_dir)
+
+    # predict class info for each tuft
     prediction_results=predict_tufts(detection_results)
+
+    # save the final results 
     save_files(prediction_results, image_dir, output_dir)

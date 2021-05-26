@@ -135,6 +135,7 @@ output/
 classification/affine_matching/gt_txt/
 classification/affine_matching/pred_txt/
 classification/affine_matching/result/
+*.xml
 
 # vscode
 .vscode/

@@ -10,7 +10,7 @@ from detectron2.utils.visualizer import Visualizer
 from classification.affine_matching.affine_matching import predict_classification, parse_xml
 import numpy as np
 import os
-
+import random
 
 config_file_path="/media/ck/B6DAFDC2DAFD7F45/program/pyTuft/tiny-instance-segmentation/configs/haicu/faster_rcnn_resnet50_fpn.yaml"
 weight_file_path="/media/ck/B6DAFDC2DAFD7F45/program/pyTuft/tiny-instance-segmentation/experiments/haicu/res50fpn/model_0039999.pth"
@@ -19,9 +19,11 @@ annotation_dir=dataset_dir+"Annotations/" # only for the reference image annotat
 image_dir=dataset_dir+"JPEGImages/"  # test image dir
 
 save_image=False   # whether to show results or save results
+show_image=True
 output_dir="./output/"  # directory to save final results
-test_image_id="DSC_2422" #image id to predict the tufts
-ref_image_id="DSC_2410" # be careful about the choice of reference image. it's suggested to choose a image with all categories.
+test_image_id="DSC_2510" #image id to predict the tufts
+
+num_ref_ids=5
 
 
 def setup(detr=False):
@@ -62,6 +64,17 @@ def detect_tufts_one_image(image_path, draw=False):
         visualize_results(img,detection_results)
     return outputs
 
+
+def choose_ref_image_id_list():
+    """randomly choose some reference images
+
+    Returns:
+        list: a list to store reference image ids
+    """
+    annotation_list=os.listdir(annotation_dir)
+    ref_annotation_list=random.sample(annotation_list, num_ref_ids)
+    ref_id_list=[x[:-4] for x in ref_annotation_list]
+    return ref_id_list
 
 
 def calc_center_from_box(box_array):
@@ -104,9 +117,11 @@ def visualize_results(image, detection_results, draw=True):
     
 
 if __name__=="__main__":
-    
-    # build the category dict for visualization
-    ref_xml=parse_xml(annotation_dir+ref_image_id+".xml")
+    # random choose reference image list
+    ref_image_id_list=choose_ref_image_id_list()
+
+    # set one fixed annotation file to build the category dict for visualization
+    ref_xml=parse_xml(annotation_dir+"DSC_2410"+".xml")
     MetadataCatalog.get("tufts").set(thing_classes=list(ref_xml.keys()))
 
     # detect bounding boxes for test image
@@ -117,17 +132,18 @@ if __name__=="__main__":
     # propagate class information for the bounding boxes
     boxes=detection_results["instances"].to("cpu")
     center_array=calc_center_from_box(boxes.pred_boxes)
-    predict_result=predict_classification(test_image_id,dataset_dir, ref_image_id, target_box_center=center_array, draw=False)
+    predict_result=predict_classification(test_image_id,dataset_dir, ref_image_id_list, target_box_center=center_array, draw=False)
     for i in range(boxes.pred_classes.shape[0]):
-        boxes.pred_classes[i]=predict_result[i]
+        if predict_result.__contains__(i):
+            boxes.pred_classes[i]=predict_result[i]
 
     # draw the final detection results
     image=cv2.imread(test_image_path)
     if save_image:
-        results=visualize_results(image, boxes, draw=False)
+        results=visualize_results(image, boxes, draw=show_image)
         save_image_dir=output_dir+"final_results/"
         os.makedirs(save_image_dir, exist_ok=True)
         cv2.imwrite(save_image_dir+test_image_id+".png",results)
         print("image saved to "+save_image_dir+test_image_id+".png")
     else:
-        visualize_results(image, boxes, draw=True)
+        visualize_results(image, boxes, draw=show_image)

@@ -118,7 +118,7 @@ def parse_XML(filename):
 
 # get a list of labels and a list of corresponding coordinates,
 # here for the right side
-labels_src, xy_src = read_label_positions("DSC_2610.xml")
+labels_src, xy_src = read_label_positions("DSC_2529.xml")
 #print(labels_src, xy_src)
 
 # get positions for bounding boxes from some training data,

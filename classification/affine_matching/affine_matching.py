@@ -47,7 +47,6 @@ def parse_xml_box(xml_path):
     box_dict={}
     tree = ET.parse(xml_path)
     for obj in tree.findall("object"):
-        cls = "tuft"
         bbox = obj.find("bndbox")
         bbox = [float(bbox.find(x).text)//downsample_ratio for x in ["xmin", "ymin", "xmax", "ymax"]] # top_left(x, y) right_bottom(x,y), downsample ratio=5
         box_dict.setdefault(obj.find("name").text, bbox)
@@ -115,11 +114,58 @@ def predict_box(pred_image_name, dataset_dir,draw=False, save_result=False):
         # cv2.imwrite("result/{}.jpg".format(pred_image_name), img_target)
 
 
-def predict_classification(pred_image_id, dataset_dir, ref_image_id="DSC_2410", target_box_center=None, draw=False):
+def choose_best_ref_image(dataset_dir, ref_image_id_list, test_image_id, target_xml_array):
+    """choose the best reference image according to matching errors
+
+    Args:
+        dataset_dir (str): dataset dir
+        ref_image_id_list (list): a list that stores the reference image ids
+        test_image_id (str): the id of test image
+        target_xml_array (array): the location of bounding boxes
+
+    Returns:
+        str: the founded reference image id
+    """
     annotation_dir=os.path.join(dataset_dir,"Annotations/")
     image_dir=os.path.join(dataset_dir,"JPEGImages/")
-    ref_image_path=image_dir+ref_image_id+'.JPG' # source/reference image path
-    ref_xml=parse_xml(annotation_dir+ref_image_id+'.xml')  # reference image bounding box
+    error_list=[]
+    for ref_image_id in ref_image_id_list:
+        ref_image_path=image_dir+ref_image_id+'.JPG' # source/reference image path
+        ref_xml=parse_xml(annotation_dir+ref_image_id+'.xml')  # reference image bounding box
+        ref_xml_array=np.array(list(ref_xml.values()))
+
+        target_image_path=image_dir+test_image_id+'.JPG' # target image path
+
+        # calculate the tranformation matrix and predict the corresponding points
+        a=Align(ref_image_path,target_image_path,threshold=1, downsample_ratio=downsample_ratio)
+        transformed_array=a.align_points(ref_xml_array.T)
+        box_tree2=KDTree(target_xml_array)  # a KD-tree to search for the nearest annotations
+        point_error_list=[]
+        for i in range(transformed_array.shape[1]):
+            dist1, ind=box_tree2.query(transformed_array[:,i].T,k=1) # choose the nearest point of predicted result
+            point_error_list.append(dist1)
+        error_list.append(sum(point_error_list)/len(point_error_list))
+    min_error=min(error_list)
+    print("the minimum distance is {}".format(min_error))
+    return ref_image_id_list[error_list.index(min_error)]
+
+
+def predict_classification(pred_image_id, dataset_dir, ref_image_id_list, target_box_center=None, draw=False):
+    """predict class info for each bounding box in target_box_center in pred_image
+
+    Args:
+        pred_image_id (str): target image id 
+        dataset_dir (str): dataset dir
+        ref_image_id_list (list): a list that stores reference image ids
+        target_box_center (array, optional): if there are annotations for this pred_image_id, we can get tufts location from annotations
+                                            if not, read info from this parameters. Defaults to None.
+        draw (bool, optional): whether to draw the classification results in point format. Defaults to False.
+
+    Returns:
+        dict: a mapping dict, key is the tuft id in ref_image, value is the tuft id in pred_image
+    """
+    annotation_dir=os.path.join(dataset_dir,"Annotations/")
+    image_dir=os.path.join(dataset_dir,"JPEGImages/")
     
     target_image_path = image_dir+pred_image_id+'.JPG'        # target image/image to be predicted
     if target_box_center is None:
@@ -131,6 +177,12 @@ def predict_classification(pred_image_id, dataset_dir, ref_image_id="DSC_2410", 
     else:
         target_xml_array=target_box_center//downsample_ratio
 
+    # randonly choose the reference image list
+    ref_image_id=choose_best_ref_image(dataset_dir, ref_image_id_list, pred_image_id, target_xml_array)
+    print("best ref id for {} is {}".format(pred_image_id, ref_image_id))
+
+    ref_image_path=image_dir+ref_image_id+'.JPG' # source/reference image path
+    ref_xml=parse_xml(annotation_dir+ref_image_id+'.xml')  # reference image bounding box
     ref_xml_array=np.array(list(ref_xml.values()))
 
     # calculate the tranformation matrix and predict the corresponding points
@@ -147,6 +199,7 @@ def predict_classification(pred_image_id, dataset_dir, ref_image_id="DSC_2410", 
         dist1, ind=box_tree2.query(transformed_array[:,i].T,k=1) # choose the nearest point of predicted result
         predict_result.setdefault(ind, i)
     
+    # draw results
     if draw:
         plt.subplot(121)
         plt.title("known coords and labels")
@@ -264,9 +317,10 @@ if __name__=="__main__":
         elif metric=="box":
             generate_evaluation_txt(dataset_dir)
     else:
-        image_name="DSC_2423"
+        image_name="DSC_2549"
+        reference_image_id_list=[image_name]
         if metric=="point":
-            predict_classification(image_name,dataset_dir, draw=True)
+            predict_classification(image_name,dataset_dir, reference_image_id_list, draw=True)
         elif metric=="box":
             predict_box(image_name,dataset_dir, draw=True)
         
